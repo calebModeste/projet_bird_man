@@ -65,9 +65,9 @@ Ouvrez et exécutez le notebook `projet_birdMan.ipynb` dans Jupyter Notebook ou 
 
 ## Auteur
 
-> - [Akram CHAMI]()
-> - [Caleb Nathanael TSIBA MODESTE]()
-> - [James MBA FONGANG]()
+> - [Akram CHAMI](https://github.com/akramchami99)
+> - [Caleb Nathanael TSIBA MODESTE](https://github.com/calebModeste)
+> - [James MBA FONGANG](https://github.com/MFJD)
 
 Master IA - Cours de Machine et Deep Learning
 
