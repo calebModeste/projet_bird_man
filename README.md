@@ -38,11 +38,15 @@ Le projet utilise des techniques de machine learning et deep learning pour class
 
 ```
 projet_birdMan/
-├── projet_birdMan.ipynb          # Notebook principal avec le code du projet
-├── README.md                      # Ce fichier
+├── projet_birdMan.ipynb          # Notebook principal (Transfer Learning MobileNetV2)
+├── projet_birdMan_CNN.ipynb      # Notebook CNN classique (sans Transfer Learning)
+├── api.py                        # API FastAPI pour la classification
+├── requirements-api.txt          # Dépendances de l'API
+├── example-nextjs-usage.ts       # Exemple d'utilisation React/Next.js
+├── README.md                     # Ce fichier
 ├── data/
-│   ├── train_bird/               # Données d'entraînement (24 espèces)
-│   └── valid_bird/               # Données de validation (24 espèces)
+│   ├── train_bird/               # Données d'entraînement (25 espèces)
+│   └── valid_bird/               # Données de validation (25 espèces)
 ```
 
 ## Dataset
@@ -62,6 +66,86 @@ Les packages suivants sont nécessaires pour exécuter ce projet :
 ## Utilisation
 
 Ouvrez et exécutez le notebook `projet_birdMan.ipynb` dans Jupyter Notebook ou JupyterLab.
+
+## API de Classification
+
+Une API REST est disponible pour classifier des images d'oiseaux depuis une application web (React/Next.js).
+
+### Installation des dépendances
+
+```bash
+pip install -r requirements-api.txt
+```
+
+### Lancer l'API
+
+```bash
+# Mode développement (avec auto-reload)
+uvicorn api:app --reload --host 0.0.0.0 --port 8000
+
+# Ou directement avec Python
+python api.py
+```
+
+### Endpoints disponibles
+
+| Méthode | Endpoint          | Description                     |
+| ------- | ----------------- | ------------------------------- |
+| `GET`   | `/`               | Page d'accueil                  |
+| `GET`   | `/health`         | État de l'API                   |
+| `GET`   | `/classes`        | Liste des 25 espèces d'oiseaux  |
+| `GET`   | `/docs`           | Documentation Swagger           |
+| `POST`  | `/predict`        | Classifier une image (FormData) |
+| `POST`  | `/predict/base64` | Classifier une image (Base64)   |
+
+### Exemple de réponse
+
+```json
+{
+  "success": true,
+  "message": "Classification réussie",
+  "predictions": [
+    {
+      "rank": 1,
+      "class_name": "Indian-Peacock",
+      "class_name_fr": "Paon bleu",
+      "confidence": 0.89
+    },
+    {
+      "rank": 2,
+      "class_name": "Indian-Roller",
+      "class_name_fr": "Rollier indien",
+      "confidence": 0.06
+    },
+    {
+      "rank": 3,
+      "class_name": "Common-Kingfisher",
+      "class_name_fr": "Martin-pêcheur",
+      "confidence": 0.03
+    }
+  ],
+  "top_prediction": {
+    "rank": 1,
+    "class_name": "Indian-Peacock",
+    "confidence": 0.89
+  }
+}
+```
+
+### Utilisation avec React/Next.js
+
+```typescript
+const formData = new FormData();
+formData.append("file", imageFile);
+
+const response = await fetch("http://localhost:8000/predict", {
+  method: "POST",
+  body: formData,
+});
+
+const result = await response.json();
+console.log(result.predictions); // Top 3 prédictions
+```
 
 ## Auteur
 
