@@ -144,18 +144,18 @@ def load_model():
         # Essayer de charger le modèle fine-tuned d'abord
         if os.path.exists(MODEL_PATH):
             model = tf.keras.models.load_model(MODEL_PATH)
-            print(f"✓ Modèle chargé : {MODEL_PATH}")
+            print(f"Modele charge : {MODEL_PATH}")
             return MODEL_PATH
         elif os.path.exists(MODEL_PATH_BACKUP):
             model = tf.keras.models.load_model(MODEL_PATH_BACKUP)
-            print(f"✓ Modèle chargé : {MODEL_PATH_BACKUP}")
+            print(f"Modele charge : {MODEL_PATH_BACKUP}")
             return MODEL_PATH_BACKUP
         else:
-            print("⚠ Aucun modèle trouvé. L'API fonctionnera en mode demo.")
+            print("Aucun modele trouve. L'API fonctionnera en mode demo.")
             return None
             
     except Exception as e:
-        print(f"❌ Erreur lors du chargement du modèle : {e}")
+        print(f"Erreur lors du chargement du modele : {e}")
         return None
 
 
@@ -202,11 +202,11 @@ def get_top_predictions(predictions: np.ndarray, top_k: int = 3) -> List[Predict
 async def startup_event():
     """Événement de démarrage - charge le modèle"""
     print("\n" + "="*50)
-    print("🐦 Bird Classification API - Démarrage")
+    print("Bird Classification API - Démarrage")
     print("="*50)
     load_model()
-    print(f"📊 Nombre de classes : {len(CLASS_NAMES)}")
-    print(f"🖼️ Taille des images : {IMG_SIZE}x{IMG_SIZE}")
+    print(f"Nombre de classes : {len(CLASS_NAMES)}")
+    print(f"Taille des images : {IMG_SIZE}x{IMG_SIZE}")
     print("="*50 + "\n")
 
 
@@ -214,7 +214,7 @@ async def startup_event():
 async def root():
     """Page d'accueil de l'API"""
     return {
-        "message": "🐦 Bird Classification API",
+        "message": "Bird Classification API",
         "version": "1.0.0",
         "endpoints": {
             "POST /predict": "Classifier une image d'oiseau",
@@ -362,7 +362,7 @@ async def predict_base64(data: dict):
 # Point d'entrée pour le développement
 if __name__ == "__main__":
     import uvicorn
-    print("\n🚀 Démarrage du serveur de développement...")
+    print("\n Démarrage du serveur de développement...")
     uvicorn.run(
         "api:app",
         host="0.0.0.0",
