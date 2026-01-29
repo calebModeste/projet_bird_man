@@ -29,7 +29,6 @@ build/
 # Jupyter
 .ipynb_checkpoints/
 
-
 # IDE
 .vscode/
 .idea/
