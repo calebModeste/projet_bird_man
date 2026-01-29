@@ -1,0 +1,16 @@
+{
+  "name": "bird-classification-api",
+  "version": "1.0.0",
+  "description": "API de classification d'oiseaux avec Transfer Learning",
+  "scripts": {
+    "start": "uvicorn api:app --host 0.0.0.0 --port 8000",
+    "dev": "uvicorn api:app --reload --host 0.0.0.0 --port 8000"
+  },
+  "keywords": [
+    "bird",
+    "classification",
+    "deep-learning",
+    "tensorflow",
+    "fastapi"
+  ]
+}

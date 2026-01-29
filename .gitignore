@@ -1,1 +1,46 @@
+# Données
 /data/*
+*.csv
+*.zip
+
+# Modèles entraînés (trop volumineux pour GitHub > 100MB)
+*.h5
+*.keras
+*.pb
+*.onnx
+*.pt
+*.pth
+saved_model/
+models/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environnement
+.env
+.env.local
