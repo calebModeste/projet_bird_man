@@ -74,7 +74,7 @@ Une API REST est disponible pour classifier des images d'oiseaux depuis une appl
 ### Installation des dépendances
 
 ```bash
-pip install -r requirements-api.txt
+pip install -r requirements.txt
 ```
 
 ### Lancer l'API
