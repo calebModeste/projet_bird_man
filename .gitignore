@@ -8,7 +8,6 @@
 *.keras
 *.pb
 *.onnx
-*.pt
 *.pth
 saved_model/
 models/
