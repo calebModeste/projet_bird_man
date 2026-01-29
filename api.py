@@ -2,7 +2,7 @@
 API de Classification d'Oiseaux - Bird Classification API
 =========================================================
 API REST utilisant FastAPI pour classifier des images d'oiseaux
-avec les modèles entraînés (MobileNetV2 Transfer Learning)
+Support des modèles TensorFlow/Keras ET PyTorch
 
 Usage:
     uvicorn api:app --reload --host 0.0.0.0 --port 8000
@@ -12,19 +12,36 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Literal
 import numpy as np
 from PIL import Image
 import io
 import os
 from pathlib import Path
 
-# Configuration
-IMG_SIZE = 224
-MODEL_PATH = "best_model_mobilenet_finetuned.h5"
-MODEL_PATH_BACKUP = "best_model_mobilenet.h5"
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
 
-# Liste des classes d'oiseaux (à mettre à jour selon votre dataset)
+IMG_SIZE = 224
+
+# Chemins des modèles
+TENSORFLOW_MODEL_PATHS = [
+    "best_model_mobilenet_finetuned.h5",
+    "best_model_mobilenet.h5",
+    "bird_classifier_mobilenet.h5"
+]
+
+PYTORCH_MODEL_PATHS = [
+    "best_model_pytorch.pth",
+    "bird_classifier_pytorch.pth",
+    "model_pytorch.pt"
+]
+
+# Framework actif (sera détecté automatiquement)
+ACTIVE_FRAMEWORK: Optional[Literal["tensorflow", "pytorch"]] = None
+
+# Liste des classes d'oiseaux
 CLASS_NAMES = [
     "Asian-Green-Bee-Eater",
     "Brown-Headed-Barbet",
@@ -52,57 +69,6 @@ CLASS_NAMES = [
     "White-Breasted-Waterhen",
     "White-Wagtail"
 ]
-
-# Initialiser FastAPI
-app = FastAPI(
-    title="Bird Classification API",
-    description="API pour classifier des images d'oiseaux avec Transfer Learning (MobileNetV2)",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
-
-# Configuration CORS pour React/Next.js
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",      # Next.js dev
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        "https://localhost:3000",
-        "*"                           # Pour le développement (à restreindre en production)
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Variable globale pour le modèle
-model = None
-
-
-# Modèles Pydantic pour les réponses
-class Prediction(BaseModel):
-    rank: int
-    class_name: str
-    class_name_fr: str
-    confidence: float
-    confidence_percent: str
-
-
-class PredictionResponse(BaseModel):
-    success: bool
-    message: str
-    predictions: List[Prediction]
-    top_prediction: Optional[Prediction] = None
-
-
-class HealthResponse(BaseModel):
-    status: str
-    model_loaded: bool
-    model_path: str
-    num_classes: int
-
 
 # Dictionnaire de traduction des noms d'oiseaux
 BIRD_NAMES_FR = {
@@ -133,53 +99,267 @@ BIRD_NAMES_FR = {
     "White-Wagtail": "Bergeronnette grise"
 }
 
+# ============================================================================
+# FASTAPI APP
+# ============================================================================
 
-def load_model():
-    """Charge le modèle TensorFlow/Keras"""
-    global model
-    
+app = FastAPI(
+    title="Bird Classification API",
+    description="API pour classifier des images d'oiseaux - Support TensorFlow & PyTorch",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# Configuration CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Variables globales
+model = None
+model_path_loaded = None
+
+# ============================================================================
+# MODÈLES PYDANTIC
+# ============================================================================
+
+class Prediction(BaseModel):
+    rank: int
+    class_name: str
+    class_name_fr: str
+    confidence: float
+    confidence_percent: str
+
+
+class PredictionResponse(BaseModel):
+    success: bool
+    message: str
+    framework: Optional[str] = None
+    predictions: List[Prediction]
+    top_prediction: Optional[Prediction] = None
+
+
+class HealthResponse(BaseModel):
+    status: str
+    model_loaded: bool
+    framework: Optional[str] = None
+    model_path: Optional[str] = None
+    num_classes: int
+    supported_frameworks: List[str]
+
+
+# ============================================================================
+# CHARGEMENT DES MODÈLES
+# ============================================================================
+
+def load_tensorflow_model() -> tuple:
+    """Charge un modèle TensorFlow/Keras"""
     try:
         import tensorflow as tf
         
-        # Essayer de charger le modèle fine-tuned d'abord
-        if os.path.exists(MODEL_PATH):
-            model = tf.keras.models.load_model(MODEL_PATH)
-            print(f"Modele charge : {MODEL_PATH}")
-            return MODEL_PATH
-        elif os.path.exists(MODEL_PATH_BACKUP):
-            model = tf.keras.models.load_model(MODEL_PATH_BACKUP)
-            print(f"Modele charge : {MODEL_PATH_BACKUP}")
-            return MODEL_PATH_BACKUP
-        else:
-            print("Aucun modele trouve. L'API fonctionnera en mode demo.")
-            return None
-            
+        for model_path in TENSORFLOW_MODEL_PATHS:
+            if os.path.exists(model_path):
+                loaded_model = tf.keras.models.load_model(model_path)
+                print(f"✓ Modèle TensorFlow chargé : {model_path}")
+                return loaded_model, model_path, "tensorflow"
+        
+        return None, None, None
+        
+    except ImportError:
+        print("⚠ TensorFlow non installé")
+        return None, None, None
     except Exception as e:
-        print(f"Erreur lors du chargement du modele : {e}")
-        return None
+        print(f"❌ Erreur TensorFlow : {e}")
+        return None, None, None
 
 
-def preprocess_image(image: Image.Image) -> np.ndarray:
-    """Prétraitement de l'image pour le modèle"""
-    # Convertir en RGB si nécessaire
+def load_pytorch_model() -> tuple:
+    """Charge un modèle PyTorch"""
+    try:
+        import torch
+        import torch.nn as nn
+        from torchvision import models
+        
+        # Définir l'architecture du modèle (MobileNetV2 modifié)
+        class BirdClassifierPyTorch(nn.Module):
+            def __init__(self, num_classes=25):
+                super(BirdClassifierPyTorch, self).__init__()
+                # Charger MobileNetV2 pré-entraîné
+                self.base_model = models.mobilenet_v2(pretrained=False)
+                
+                # Remplacer le classificateur
+                in_features = self.base_model.classifier[1].in_features
+                self.base_model.classifier = nn.Sequential(
+                    nn.Dropout(0.5),
+                    nn.Linear(in_features, 256),
+                    nn.ReLU(),
+                    nn.BatchNorm1d(256),
+                    nn.Dropout(0.3),
+                    nn.Linear(256, 128),
+                    nn.ReLU(),
+                    nn.Linear(128, num_classes)
+                )
+            
+            def forward(self, x):
+                return self.base_model(x)
+        
+        # Chercher un modèle PyTorch
+        for model_path in PYTORCH_MODEL_PATHS:
+            if os.path.exists(model_path):
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                
+                # Essayer de charger comme state_dict
+                try:
+                    loaded_model = BirdClassifierPyTorch(num_classes=len(CLASS_NAMES))
+                    loaded_model.load_state_dict(torch.load(model_path, map_location=device))
+                    loaded_model.to(device)
+                    loaded_model.eval()
+                    print(f"✓ Modèle PyTorch chargé (state_dict) : {model_path}")
+                    return loaded_model, model_path, "pytorch"
+                except:
+                    # Essayer de charger le modèle complet
+                    try:
+                        loaded_model = torch.load(model_path, map_location=device)
+                        loaded_model.to(device)
+                        loaded_model.eval()
+                        print(f"✓ Modèle PyTorch chargé (complet) : {model_path}")
+                        return loaded_model, model_path, "pytorch"
+                    except Exception as e:
+                        print(f"⚠ Impossible de charger {model_path}: {e}")
+                        continue
+        
+        return None, None, None
+        
+    except ImportError:
+        print("⚠ PyTorch non installé")
+        return None, None, None
+    except Exception as e:
+        print(f"❌ Erreur PyTorch : {e}")
+        return None, None, None
+
+
+def load_model():
+    """Charge le modèle disponible (TensorFlow ou PyTorch)"""
+    global model, model_path_loaded, ACTIVE_FRAMEWORK
+    
+    print("\n🔍 Recherche de modèles...")
+    
+    # Essayer TensorFlow d'abord
+    tf_model, tf_path, tf_framework = load_tensorflow_model()
+    if tf_model is not None:
+        model = tf_model
+        model_path_loaded = tf_path
+        ACTIVE_FRAMEWORK = tf_framework
+        return tf_path
+    
+    # Sinon essayer PyTorch
+    pt_model, pt_path, pt_framework = load_pytorch_model()
+    if pt_model is not None:
+        model = pt_model
+        model_path_loaded = pt_path
+        ACTIVE_FRAMEWORK = pt_framework
+        return pt_path
+    
+    print("⚠ Aucun modèle trouvé. L'API fonctionnera en mode demo.")
+    ACTIVE_FRAMEWORK = None
+    return None
+
+
+# ============================================================================
+# PRÉTRAITEMENT DES IMAGES
+# ============================================================================
+
+def preprocess_image_tensorflow(image: Image.Image) -> np.ndarray:
+    """Prétraitement pour TensorFlow"""
     if image.mode != 'RGB':
         image = image.convert('RGB')
     
-    # Redimensionner
     image = image.resize((IMG_SIZE, IMG_SIZE), Image.Resampling.LANCZOS)
-    
-    # Convertir en array et normaliser
     img_array = np.array(image, dtype=np.float32) / 255.0
-    
-    # Ajouter la dimension batch
     img_array = np.expand_dims(img_array, axis=0)
     
     return img_array
 
 
+def preprocess_image_pytorch(image: Image.Image):
+    """Prétraitement pour PyTorch"""
+    import torch
+    from torchvision import transforms
+    
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+    
+    # Transformations standard pour MobileNetV2
+    transform = transforms.Compose([
+        transforms.Resize((IMG_SIZE, IMG_SIZE)),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    ])
+    
+    img_tensor = transform(image)
+    img_tensor = img_tensor.unsqueeze(0)  # Ajouter batch dimension
+    
+    return img_tensor
+
+
+def preprocess_image(image: Image.Image):
+    """Prétraitement adapté au framework actif"""
+    if ACTIVE_FRAMEWORK == "pytorch":
+        return preprocess_image_pytorch(image)
+    else:
+        return preprocess_image_tensorflow(image)
+
+
+# ============================================================================
+# PRÉDICTION
+# ============================================================================
+
+def predict_tensorflow(processed_image: np.ndarray) -> np.ndarray:
+    """Prédiction avec TensorFlow"""
+    predictions = model.predict(processed_image, verbose=0)
+    return predictions
+
+
+def predict_pytorch(processed_image) -> np.ndarray:
+    """Prédiction avec PyTorch"""
+    import torch
+    import torch.nn.functional as F
+    
+    device = next(model.parameters()).device
+    processed_image = processed_image.to(device)
+    
+    with torch.no_grad():
+        outputs = model(processed_image)
+        probabilities = F.softmax(outputs, dim=1)
+        predictions = probabilities.cpu().numpy()
+    
+    return predictions
+
+
+def make_prediction(processed_image) -> np.ndarray:
+    """Fait une prédiction avec le framework actif"""
+    if model is None:
+        # Mode demo
+        predictions = np.random.rand(1, len(CLASS_NAMES))
+        predictions = predictions / predictions.sum()
+        return predictions
+    
+    if ACTIVE_FRAMEWORK == "pytorch":
+        return predict_pytorch(processed_image)
+    else:
+        return predict_tensorflow(processed_image)
+
+
 def get_top_predictions(predictions: np.ndarray, top_k: int = 3) -> List[Prediction]:
     """Récupère les top K prédictions"""
-    # Récupérer les indices des top K prédictions
     top_indices = np.argsort(predictions[0])[::-1][:top_k]
     
     results = []
@@ -198,26 +378,33 @@ def get_top_predictions(predictions: np.ndarray, top_k: int = 3) -> List[Predict
     return results
 
 
+# ============================================================================
+# ENDPOINTS
+# ============================================================================
+
 @app.on_event("startup")
 async def startup_event():
-    """Événement de démarrage - charge le modèle"""
-    print("\n" + "="*50)
-    print("Bird Classification API - Démarrage")
-    print("="*50)
+    """Événement de démarrage"""
+    print("\n" + "="*60)
+    print("🐦 Bird Classification API - Démarrage")
+    print("="*60)
     load_model()
-    print(f"Nombre de classes : {len(CLASS_NAMES)}")
-    print(f"Taille des images : {IMG_SIZE}x{IMG_SIZE}")
-    print("="*50 + "\n")
+    print(f"📊 Nombre de classes : {len(CLASS_NAMES)}")
+    print(f"📐 Taille des images : {IMG_SIZE}x{IMG_SIZE}")
+    print(f"🔧 Framework actif : {ACTIVE_FRAMEWORK or 'Demo mode'}")
+    print("="*60 + "\n")
 
 
 @app.get("/", response_model=dict)
 async def root():
     """Page d'accueil de l'API"""
     return {
-        "message": "Bird Classification API",
-        "version": "1.0.0",
+        "message": "🐦 Bird Classification API",
+        "version": "2.0.0",
+        "framework": ACTIVE_FRAMEWORK or "demo",
         "endpoints": {
-            "POST /predict": "Classifier une image d'oiseau",
+            "POST /predict": "Classifier une image d'oiseau (upload)",
+            "POST /predict/base64": "Classifier une image en base64",
             "GET /health": "Vérifier l'état de l'API",
             "GET /classes": "Liste des classes d'oiseaux",
             "GET /docs": "Documentation Swagger"
@@ -228,11 +415,25 @@ async def root():
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Vérification de l'état de l'API"""
+    supported = []
+    try:
+        import tensorflow
+        supported.append("tensorflow")
+    except:
+        pass
+    try:
+        import torch
+        supported.append("pytorch")
+    except:
+        pass
+    
     return HealthResponse(
         status="healthy" if model is not None else "degraded",
         model_loaded=model is not None,
-        model_path=MODEL_PATH if os.path.exists(MODEL_PATH) else MODEL_PATH_BACKUP,
-        num_classes=len(CLASS_NAMES)
+        framework=ACTIVE_FRAMEWORK,
+        model_path=model_path_loaded,
+        num_classes=len(CLASS_NAMES),
+        supported_frameworks=supported
     )
 
 
@@ -260,42 +461,27 @@ async def predict(file: UploadFile = File(...)):
     
     - **file**: Image à classifier (JPEG, PNG, WebP)
     
-    Retourne les 3 prédictions les plus probables avec:
-    - Rang (1, 2, 3)
-    - Nom de l'espèce (EN/FR)
-    - Score de confiance
+    Retourne les 3 prédictions les plus probables
     """
-    
-    # Vérifier le type de fichier
     allowed_types = ["image/jpeg", "image/png", "image/webp", "image/jpg"]
     if file.content_type not in allowed_types:
         raise HTTPException(
             status_code=400,
-            detail=f"Type de fichier non supporté: {file.content_type}. Utilisez JPEG, PNG ou WebP."
+            detail=f"Type non supporté: {file.content_type}. Utilisez JPEG, PNG ou WebP."
         )
     
     try:
-        # Lire l'image
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
         
-        # Prétraiter l'image
         processed_image = preprocess_image(image)
-        
-        # Faire la prédiction
-        if model is not None:
-            predictions = model.predict(processed_image, verbose=0)
-        else:
-            # Mode demo : prédictions aléatoires
-            predictions = np.random.rand(1, len(CLASS_NAMES))
-            predictions = predictions / predictions.sum()  # Normaliser
-        
-        # Récupérer les top 3 prédictions
+        predictions = make_prediction(processed_image)
         top_predictions = get_top_predictions(predictions, top_k=3)
         
         return PredictionResponse(
             success=True,
             message="Classification réussie",
+            framework=ACTIVE_FRAMEWORK or "demo",
             predictions=top_predictions,
             top_prediction=top_predictions[0] if top_predictions else None
         )
@@ -324,30 +510,20 @@ async def predict_base64(data: dict):
     try:
         image_data = data.get("image", "")
         
-        # Extraire les données base64
         if "base64," in image_data:
             image_data = image_data.split("base64,")[1]
         
-        # Décoder l'image
         image_bytes = base64.b64decode(image_data)
         image = Image.open(io.BytesIO(image_bytes))
         
-        # Prétraiter l'image
         processed_image = preprocess_image(image)
-        
-        # Faire la prédiction
-        if model is not None:
-            predictions = model.predict(processed_image, verbose=0)
-        else:
-            predictions = np.random.rand(1, len(CLASS_NAMES))
-            predictions = predictions / predictions.sum()
-        
-        # Récupérer les top 3 prédictions
+        predictions = make_prediction(processed_image)
         top_predictions = get_top_predictions(predictions, top_k=3)
         
         return PredictionResponse(
             success=True,
             message="Classification réussie",
+            framework=ACTIVE_FRAMEWORK or "demo",
             predictions=top_predictions,
             top_prediction=top_predictions[0] if top_predictions else None
         )
@@ -359,10 +535,32 @@ async def predict_base64(data: dict):
         )
 
 
-# Point d'entrée pour le développement
+@app.post("/reload-model")
+async def reload_model_endpoint():
+    """Recharge le modèle (utile après un changement de modèle)"""
+    global model, model_path_loaded, ACTIVE_FRAMEWORK
+    
+    model = None
+    model_path_loaded = None
+    ACTIVE_FRAMEWORK = None
+    
+    loaded_path = load_model()
+    
+    return {
+        "success": model is not None,
+        "framework": ACTIVE_FRAMEWORK,
+        "model_path": loaded_path,
+        "message": f"Modèle rechargé avec {ACTIVE_FRAMEWORK}" if model else "Aucun modèle trouvé"
+    }
+
+
+# ============================================================================
+# POINT D'ENTRÉE
+# ============================================================================
+
 if __name__ == "__main__":
     import uvicorn
-    print("\n Démarrage du serveur de développement...")
+    print("\n🚀 Démarrage du serveur de développement...")
     uvicorn.run(
         "api:app",
         host="0.0.0.0",
