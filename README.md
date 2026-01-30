@@ -49,9 +49,37 @@ projet_birdMan/
 │   └── valid_bird/               # Données de validation (25 espèces)
 ```
 
+## Architecture des branches
+
+### 🌿 Branche `main`
+
+Contient l'API complète:
+
+- **API PyTorch + ResNet18** : Modèle entraîné avec PyTorch (`best_resnet18.pt`)
+- **fichier** `projet_birdMan.ipynb`
+
+### 🌿 Branche `developp`
+
+Contient l'API complète:
+
+- **API TensorFlow + MobileNetV2** : Modèle fine-tuné MobileNetV2 (`best_model_mobilenet_finetuned.h5`)
+- **fichier** `projet_birdManTrans.ipynb`
+
+### 🌿 Branche `next_projet`
+
+Contient l'interface frontend React/Next.js pour interagir avec l'API
+
+## 🚀 Déploiement
+
+L'API est actuellement déployée sur **[Render](https://render.com)** :
+
+**URL de l'API déployée :** [https://projet-bird-man-1.onrender.com/docs](https://projet-bird-man-1.onrender.com/docs)
+
+> ⚠️ **Attention** : Ce déploiement est temporaire.
+
 ## Dataset
 
-> **Source du dataset :** [Lien Google Drive](https://drive.google.com/drive/folders/1kHTcb7OktpYB9vUaZPLQ3ywXFYMUdQsP?usp=sharing)
+> **Source du dataset :** [Lien Google Drive](https://drive.google.com/drive/folders/1kHTcb7OktpYB9vUaZPLQ3ywXFYMUdQsP?usp=sharing) || [Lien Kaggle](https://www.kaggle.com/code/hamedghorbani/25-indian-bird-specie-image-classification-98-5)
 
 ## Requêtes
 
