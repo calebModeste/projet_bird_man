@@ -51,7 +51,8 @@ projet_birdMan/
 
 ## Dataset
 
-> **Source du dataset :** [Lien Google Drive](https://drive.google.com/drive/folders/1kHTcb7OktpYB9vUaZPLQ3ywXFYMUdQsP?usp=sharing)
+> **Source du dataset :** [Lien Google Drive](https://drive.google.com/drive/folders/1kHTcb7OktpYB9vUaZPLQ3ywXFYMUdQsP?usp=sharing) || [Lien Kaggle](https://www.kaggle.com/code/hamedghorbani/25-indian-bird-specie-image-classification-98-5)
+
 
 ## Requêtes
 
