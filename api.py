@@ -1,20 +1,17 @@
 """
-API de Classification d'Oiseaux - Bird Classification API (PyTorch)
-==================================================================
-API REST utilisant FastAPI pour classifier des images d'oiseaux
-avec un modèle ResNet18 entraîné (Transfer Learning)
+Bird Classification API (PyTorch - ResNet18)
 """
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 from PIL import Image
 import torch
 import torch.nn as nn
 import torchvision.models as models
 import torchvision.transforms as transforms
-import numpy as np
+import json
 import io
 import os
 
@@ -23,44 +20,21 @@ import os
 # =========================
 IMG_SIZE = 224
 MODEL_PATH = "best_resnet18.pt"
+CLASS_NAMES_PATH = "class_names.json"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ⚠️ MUST match training order
-CLASS_NAMES = [
-    "Asian-Green-Bee-Eater",
-    "Brown-Headed-Barbet",
-    "Cattle-Egret",
-    "Common-Kingfisher",
-    "Common-Myna",
-    "Common-Rosefinch",
-    "Common-Tailorbird",
-    "Coppersmith-Barbet",
-    "Forest-Wagtail",
-    "Gray-Wagtail",
-    "Hoopoe",
-    "House-Crow",
-    "Indian-Grey-Hornbill",
-    "Indian-Peacock",
-    "Indian-Pitta",
-    "Indian-Roller",
-    "Jungle-Babbler",
-    "Northern-Lapwing",
-    "Red-Wattled-Lapwing",
-    "Ruddy-Shelduck",
-    "Rufous-Treepie",
-    "Sarus-Crane",
-    "White-Breasted-Kingfisher",
-    "White-Breasted-Waterhen",
-    "White-Wagtail"
-]
+# =========================
+# LOAD CLASS NAMES
+# =========================
+with open(CLASS_NAMES_PATH, "r") as f:
+    CLASS_NAMES = json.load(f)
+
+NUM_CLASSES = len(CLASS_NAMES)
 
 # =========================
 # FASTAPI INIT
 # =========================
-app = FastAPI(
-    title="Bird Classification API (PyTorch)",
-    version="2.0.0"
-)
+app = FastAPI(title="Bird Classification API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,7 +44,7 @@ app.add_middleware(
 )
 
 # =========================
-# PYDANTIC MODELS
+# RESPONSE MODELS
 # =========================
 class Prediction(BaseModel):
     rank: int
@@ -78,32 +52,25 @@ class Prediction(BaseModel):
     confidence: float
     confidence_percent: str
 
-
 class PredictionResponse(BaseModel):
     success: bool
     predictions: List[Prediction]
     top_prediction: Prediction
 
-
 # =========================
 # LOAD MODEL
 # =========================
-model = None
+model = models.resnet18(weights=None)
+model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
+model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+model.to(DEVICE)
+model.eval()
 
-def load_model():
-    global model
-
-    model = models.resnet18(weights=None)
-    model.fc = nn.Linear(model.fc.in_features, len(CLASS_NAMES))
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
-    model.to(DEVICE)
-    model.eval()
-
-    print("✓ Modèle PyTorch chargé :", MODEL_PATH)
-
+print("✓ Model loaded")
+print("✓ Classes:", NUM_CLASSES)
 
 # =========================
-# PREPROCESS (IMAGENET)
+# PREPROCESS (MUST MATCH TRAINING)
 # =========================
 transform = transforms.Compose([
     transforms.Resize((IMG_SIZE, IMG_SIZE)),
@@ -114,51 +81,39 @@ transform = transforms.Compose([
     ),
 ])
 
-
-def preprocess_image(image: Image.Image) -> torch.Tensor:
+def preprocess(image: Image.Image):
     if image.mode != "RGB":
         image = image.convert("RGB")
     return transform(image).unsqueeze(0)
 
-
 # =========================
-# STARTUP
-# =========================
-@app.on_event("startup")
-async def startup():
-    if not os.path.exists(MODEL_PATH):
-        raise RuntimeError("❌ Modèle PyTorch introuvable")
-    load_model()
-
-
-# =========================
-# ROUTES
+# ROUTE
 # =========================
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(file: UploadFile = File(...)):
     if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
-        raise HTTPException(status_code=400, detail="Format non supporté")
+        raise HTTPException(400, "Unsupported file type")
 
-    image_bytes = await file.read()
-    image = Image.open(io.BytesIO(image_bytes))
-
-    x = preprocess_image(image).to(DEVICE)
+    image = Image.open(io.BytesIO(await file.read()))
+    x = preprocess(image).to(DEVICE)
 
     with torch.no_grad():
-        outputs = model(x)
-        probs = torch.softmax(outputs, dim=1)[0].cpu().numpy()
+        logits = model(x)
+        probs = torch.softmax(logits, dim=1)[0]
 
-    top_idx = probs.argsort()[::-1][:3]
+    top_idx = torch.topk(probs, 3).indices.tolist()
 
-    predictions = [
-        Prediction(
-            rank=i + 1,
-            class_name=CLASS_NAMES[idx],
-            confidence=float(probs[idx]),
-            confidence_percent=f"{probs[idx]*100:.2f}%"
+    predictions = []
+    for rank, idx in enumerate(top_idx, 1):
+        p = probs[idx].item()
+        predictions.append(
+            Prediction(
+                rank=rank,
+                class_name=CLASS_NAMES[idx],
+                confidence=p,
+                confidence_percent=f"{p*100:.2f}%"
+            )
         )
-        for i, idx in enumerate(top_idx)
-    ]
 
     return PredictionResponse(
         success=True,
@@ -166,9 +121,8 @@ async def predict(file: UploadFile = File(...)):
         top_prediction=predictions[0]
     )
 
-
 # =========================
-# RUN (DEV)
+# RUN
 # =========================
 if __name__ == "__main__":
     import uvicorn
