@@ -51,31 +51,31 @@ projet_birdMan/
 
 ## Architecture des branches
 
-### 🌿 Branche `main`
+### Branche `main`
 
 Contient l'API complète:
 
 - **API PyTorch + ResNet18** : Modèle entraîné avec PyTorch (`best_resnet18.pt`)
 - **fichier** `projet_birdMan.ipynb`
 
-### 🌿 Branche `developp`
+### Branche `developp`
 
 Contient l'API complète:
 
 - **API TensorFlow + MobileNetV2** : Modèle fine-tuné MobileNetV2 (`best_model_mobilenet_finetuned.h5`)
 - **fichier** `projet_birdManTrans.ipynb`
 
-### 🌿 Branche `next_projet`
+### Branche `next_projet`
 
 Contient l'interface frontend React/Next.js pour interagir avec l'API
 
-## 🚀 Déploiement
+## Déploiement
 
 L'API est actuellement déployée sur **[Render](https://render.com)** :
 
 **URL de l'API déployée :** [https://projet-bird-man-1.onrender.com/docs](https://projet-bird-man-1.onrender.com/docs)
 
-> ⚠️ **Attention** : Ce déploiement est temporaire.
+> **Attention** : Ce déploiement est temporaire.
 
 ## Dataset
 
